@@ -1,0 +1,7 @@
+[theme]
+base = "light" # dark
+# primaryColor = "#F0FFFF"
+backgroundColor = "#87CEEB"
+
+[server]
+# maxMessageSize = 300
