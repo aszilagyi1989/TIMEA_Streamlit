@@ -1,5 +1,6 @@
 folium
 geopandas
 pandas
+plotly.express
 streamlit
 streamlit-option-menu

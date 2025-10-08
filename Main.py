@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_option_menu import option_menu
 import folium
+import plotly.express as px
 
 #st.cache_resource
 def initialize_counties():
@@ -18,6 +19,9 @@ def initialize_counties():
   Counties = pd.merge(Counties, ValuesCounties, how = 'left', left_on = 'Megyenév', right_on = 'NEV')
   Counties = pd.merge(Counties, Attributes, how = 'left', left_on = 'M_KOD', right_on = 'MUTATO_KOD')
   Counties = Counties[['Megyenév', 'VALUE', 'geometry', 'M_KOD', 'MUTATO_FOCSOP_MEGNEV', 'MUTATO_MEGNEV', 'VON_IDO', 'Shape_Leng', 'Shape_Area']]
+  Counties['VALUE'] = Counties['VALUE'].str.replace(',', '.')
+  Counties['VALUE'] = Counties.VALUE.astype(float)
+  
   return Counties
 
 @st.cache_resource
@@ -34,6 +38,7 @@ def initialize_cities():
   Cities = Cities[['NAME', 'VALUE', 'geometry', 'M_KOD', 'MUTATO_FOCSOP_MEGNEV', 'MUTATO_MEGNEV', 'VON_IDO']]
   Cities['VALUE'] = Cities['VALUE'].str.replace(',', '.')
   Cities['VALUE'] = Cities.VALUE.astype(float)
+  
   return Cities
 
 @st.cache_resource
@@ -57,6 +62,7 @@ def initialize_regions():
   Regions = pd.merge(Regions, ValuesRegions, how = 'left', left_on = 'Régió_ne', right_on = 'NEV')
   Regions = pd.merge(Regions, Attributes, how = 'left', left_on = 'M_KOD', right_on = 'MUTATO_KOD')
   Regions = Regions[['Régió_ne', 'VALUE', 'geometry', 'M_KOD', 'MUTATO_FOCSOP_MEGNEV', 'MUTATO_MEGNEV', 'VON_IDO', 'Shape_Leng', 'Shape_Area']]
+  
   return Regions
 
 @st.cache_resource
@@ -68,10 +74,13 @@ def initialize_jaras():
   
   ValuesJaras = pd.read_csv("https://github.com/aszilagyi1989/Shiny_CSV/raw/refs/heads/main/TIMEA_Jarasok.csv", sep = ";")
   ValuesJaras['NEV'] = ValuesJaras['NEV'].str.replace(' járás', '')
+  ValuesJaras['NEV'] = ValuesJaras['NEV'].str.replace('Nyíregyházai', 'Nyíregyházi')
+  ValuesJaras['NEV'] = ValuesJaras['NEV'].str.replace('Budapest, illetve fiktív területi egység', 'Budapesti')
   
   Jaras = pd.merge(Jaras, ValuesJaras, how = 'left', left_on = 'jaras', right_on = 'NEV')
   Jaras = pd.merge(Jaras, Attributes, how = 'left', left_on = 'M_KOD', right_on = 'MUTATO_KOD')
   Jaras = Jaras[['jaras', 'VALUE', 'geometry', 'M_KOD', 'MUTATO_FOCSOP_MEGNEV', 'MUTATO_MEGNEV', 'VON_IDO', 'Shape_Leng', 'Shape_Area']]
+  
   return Jaras
 
 
@@ -93,6 +102,7 @@ if selected == 'Megye':
   Counties = initialize_counties()
   
   with st.sidebar:
+    st.sidebar.title('Adatlekérdező')
     year = st.selectbox('Év', Counties['VON_IDO'].unique())
     
     selection = Counties[(Counties['VON_IDO'] == year)]
@@ -114,31 +124,45 @@ if selected == 'Megye':
       
       Counties['lat'] = Counties['centroid'].y
       Counties['lon'] = Counties['centroid'].x
+      
+      # fig = px.scatter_map(Counties,
+      #                   lat = "lat",
+      #                   lon = "lon",
+      #                   size = 'size', # size = 'VALUE', # Adjust for larger circles if desired
+      #                   color = "VALUE",
+      #                   hover_name = "Megyenév",
+      #                   zoom = 6,
+      #                   )
+      # 
+      # fig.update_layout(height = 600) # , sizemin = 10
+      # st.plotly_chart(fig, height = 600)
     
       map = folium.Map(location = [47.162494, 19.503304], zoom_start = 7, tiles = "cartodb positron")
-      
+
       for _, r in Counties.iterrows():
         # print(f"{r['lat']}, {r['lon']} és {r['centroid']}")
         folium.Marker(location = [r['lat'], r['lon']], popup = 'Megye: {} <br> Érték: {}'.format(r['Megyenév'], r['VALUE'])).add_to(map)
-    
+
       popup = folium.GeoJsonPopup(
                fields = ['Megyenév', 'VALUE'],
                aliases = ['Megye:', 'Érték:'],
                )
-                 
+
       folium.GeoJson(data = Counties[['geometry', 'Megyenév', 'VALUE']],
                      popup = popup
                      ).add_to(map)
-      
+
       st.components.v1.html(folium.Figure().add_child(map).render(), height = 500) # , width = 1000, scrolling = False
   except Exception as e:
     st.error('Kérlek, válassz ki legalább egy megyét!')
+    # st.error(e) 
 
 elif selected == 'Település':
   
   Cities = initialize_cities()
   
   with st.sidebar:
+    st.sidebar.title('Adatlekérdező')
     year = st.selectbox('Év', Cities['VON_IDO'].unique())
     
     selection = Cities[(Cities['VON_IDO'] == year)]
@@ -171,16 +195,28 @@ elif selected == 'Település':
       Cities['lat'] = Cities['centroid'].y
       Cities['lon'] = Cities['centroid'].x
       
-      map = folium.Map(location = [47.162494, 19.503304], zoom_start = 7, tiles = "cartodb positron")
+      fig = px.scatter_map(Cities,
+                        lat = "lat",
+                        lon = "lon",
+                        size = "VALUE", # Adjust for larger circles if desired
+                        color = "VALUE",
+                        hover_name = "NAME",
+                        zoom = 6,
+                        )
+
+      fig.update_layout(height = 600)
+      st.plotly_chart(fig, height = 600)
       
-      for _, r in Cities.iterrows():
-        # print(f"{r['lat']}, {r['lon']} és {r['centroid']}")
-        folium.Marker(location = [r['lat'], r['lon']], popup = 'Település: {} <br> Érték: {}'.format(r['NAME'], r['VALUE'])).add_to(map)
-                   
-      folium.GeoJson(data = Cities[['geometry', 'NAME', 'VALUE']],
-                      ).add_to(map)
-        
-      st.components.v1.html(folium.Figure().add_child(map).render(), height = 500) # , width = 1000, scrolling = False
+      # map = folium.Map(location = [47.162494, 19.503304], zoom_start = 7, tiles = "cartodb positron")
+      # 
+      # for _, r in Cities.iterrows():
+      #   # print(f"{r['lat']}, {r['lon']} és {r['centroid']}")
+      #   folium.Marker(location = [r['lat'], r['lon']], popup = 'Település: {} <br> Érték: {}'.format(r['NAME'], r['VALUE'])).add_to(map)
+      # 
+      # folium.GeoJson(data = Cities[['geometry', 'NAME', 'VALUE']],
+      #                 ).add_to(map)
+      # 
+      # st.components.v1.html(folium.Figure().add_child(map).render(), height = 500) # , width = 1000, scrolling = False
   except Exception as e:
     st.error('Kérlek, válassz ki legalább egy települést!')
 
@@ -189,6 +225,7 @@ elif selected == 'Járás':
   Jaras = initialize_jaras()
   
   with st.sidebar:
+    st.sidebar.title('Adatlekérdező')
     year = st.selectbox('Év', Jaras['VON_IDO'].unique())
     
     selection = Jaras[(Jaras['VON_IDO'] == year)]
@@ -235,6 +272,7 @@ elif selected == 'Régió':
   Regions = initialize_regions()
   
   with st.sidebar:
+    st.sidebar.title('Adatlekérdező')
     year = st.selectbox('Év', Regions['VON_IDO'].unique())
     
     selection = Regions[(Regions['VON_IDO'] == year)]
