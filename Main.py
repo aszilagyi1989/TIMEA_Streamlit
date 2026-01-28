@@ -2,6 +2,7 @@ import geopandas as gpd
 import pandas as pd
 import streamlit as st
 from streamlit_option_menu import option_menu
+from streamlit_folium import st_folium
 import folium
 import plotly.express as px
 
@@ -120,10 +121,10 @@ if selected == 'Megye':
   try: 
     with st.spinner('A térkép megjelenítése folyamatban...'):
       Counties.crs = 'EPSG:23700'
-      Counties['centroid'] = Counties.centroid.to_crs('EPSG:4326')
-      
-      Counties['lat'] = Counties['centroid'].y
-      Counties['lon'] = Counties['centroid'].x
+      # Counties['centroid'] = Counties.centroid.to_crs('EPSG:4326') # folium-hoz kell
+      # 
+      # Counties['lat'] = Counties['centroid'].y
+      # Counties['lon'] = Counties['centroid'].x
       
       # fig = px.scatter_map(Counties,
       #                   lat = "lat",
@@ -137,25 +138,37 @@ if selected == 'Megye':
       # fig.update_layout(height = 600) # , sizemin = 10
       # st.plotly_chart(fig, height = 600)
     
-      map = folium.Map(location = [47.162494, 19.503304], zoom_start = 7, tiles = "cartodb positron")
-
-      for _, r in Counties.iterrows():
-        # print(f"{r['lat']}, {r['lon']} és {r['centroid']}")
-        folium.Marker(location = [r['lat'], r['lon']], popup = 'Megye: {} <br> Érték: {}'.format(r['Megyenév'], r['VALUE'])).add_to(map)
-
-      popup = folium.GeoJsonPopup(
-               fields = ['Megyenév', 'VALUE'],
-               aliases = ['Megye:', 'Érték:'],
-               )
-
-      folium.GeoJson(data = Counties[['geometry', 'Megyenév', 'VALUE']],
-                     popup = popup
-                     ).add_to(map)
-
-      st.components.v1.html(folium.Figure().add_child(map).render(), height = 500) # , width = 1000, scrolling = False
+      # map = folium.Map(location = [47.162494, 19.503304], zoom_start = 7, tiles = "cartodb voyager") # positron darkmatter voyager
+      # 
+      # for _, r in Counties.iterrows():
+      #   # print(f"{r['lat']}, {r['lon']} és {r['centroid']}")
+      #   folium.Marker(location = [r['lat'], r['lon']], popup = 'Megye: {} <br> Érték: {}'.format(r['Megyenév'], r['VALUE'])).add_to(map)
+      # 
+      # popup = folium.GeoJsonPopup(
+      #          fields = ['Megyenév', 'VALUE'],
+      #          aliases = ['Megye:', 'Érték:'],
+      #          )
+      # 
+      # folium.GeoJson(data = Counties[['geometry', 'Megyenév', 'VALUE']],
+      #                popup = popup
+      #                ).add_to(map)
+      # 
+      # st.components.v1.html(folium.Figure().add_child(map).render(), height = 500) # , width = 1000, scrolling = False
+      
+      m = Counties.explore(
+        column = "VALUE", # Oszlop a színezéshez
+        cmap = "viridis",   # Színskála # "viridis", "inferno", "Set2"
+        tooltip = ["Megyenév", "VALUE"], 
+        tooltip_kwds = {
+          "aliases": ["Megye:", "Érték"],
+          "labels": True
+        },
+        legend = True       # Jelmagyarázat
+      )
+      st_folium(m, width = 1400, height = 500, returned_objects = [])
+      
   except Exception as e:
-    st.error('Kérlek, válassz ki legalább egy megyét!')
-    # st.error(e) 
+    st.error(f"Kérlek, válassz ki legalább egy megyét! Hibaüzenet: {e}")
 
 elif selected == 'Település':
   
@@ -189,25 +202,27 @@ elif selected == 'Település':
   
   try:
     with st.spinner('A térkép megjelenítése folyamatban...'):
-      Cities.crs = 'EPSG:23700'
-      Cities['centroid'] = Cities.centroid
+      # Cities.crs = 'EPSG:23700' # folium-hoz kell
+      Cities.crs = 'EPSG:4326' # geopandas-hoz kell
       
-      Cities['lat'] = Cities['centroid'].y
-      Cities['lon'] = Cities['centroid'].x
+      # Cities['centroid'] = Cities.centroid
+      # 
+      # Cities['lat'] = Cities['centroid'].y
+      # Cities['lon'] = Cities['centroid'].x
       
-      fig = px.scatter_map(Cities,
-                        lat = "lat",
-                        lon = "lon",
-                        size = "VALUE", # Adjust for larger circles if desired
-                        color = "VALUE",
-                        hover_name = "NAME",
-                        zoom = 6,
-                        )
-
-      fig.update_layout(height = 600)
-      st.plotly_chart(fig, height = 600)
+      # fig = px.scatter_map(Cities,
+      #                   lat = "lat",
+      #                   lon = "lon",
+      #                   size = "VALUE", # Adjust for larger circles if desired
+      #                   color = "VALUE",
+      #                   hover_name = "NAME",
+      #                   zoom = 6,
+      #                   )
+      # 
+      # fig.update_layout(height = 600)
+      # st.plotly_chart(fig, height = 600)
       
-      # map = folium.Map(location = [47.162494, 19.503304], zoom_start = 7, tiles = "cartodb positron")
+      # map = folium.Map(location = [47.162494, 19.503304], zoom_start = 7, tiles = "cartodb voyager") # positron darkmatter voyager
       # 
       # for _, r in Cities.iterrows():
       #   # print(f"{r['lat']}, {r['lon']} és {r['centroid']}")
@@ -217,6 +232,19 @@ elif selected == 'Település':
       #                 ).add_to(map)
       # 
       # st.components.v1.html(folium.Figure().add_child(map).render(), height = 500) # , width = 1000, scrolling = False
+      
+      m = Cities.explore(
+        column = "VALUE", # Oszlop a színezéshez
+        # cmap = "viridis",   # Színskála # "viridis", "inferno", "Set2"
+        tooltip = ["NAME", "VALUE"], 
+        tooltip_kwds = {
+          "aliases": ["Település:", "Érték"],
+          "labels": True
+        },
+        legend = True       # Jelmagyarázat
+      )
+      st_folium(m, width = 1400, height = 500, returned_objects = [])
+      
   except Exception as e:
     st.error('Kérlek, válassz ki legalább egy települést!')
 
@@ -242,28 +270,43 @@ elif selected == 'Járás':
   
   try:
     with st.spinner('A térkép megjelenítése folyamatban...'):
-      Jaras.crs = 'EPSG:23700'
-      Jaras['centroid'] = Jaras.centroid# .to_crs('EPSG:4326')
+      # Jaras.crs = 'EPSG:23700' # folium-hoz kell
+      Jaras.crs = 'EPSG:4326' # geopandas-hoz kell
       
-      Jaras['lat'] = Jaras['centroid'].y
-      Jaras['lon'] = Jaras['centroid'].x
+      # Jaras['centroid'] = Jaras.centroid# .to_crs('EPSG:4326')
+      # 
+      # Jaras['lat'] = Jaras['centroid'].y
+      # Jaras['lon'] = Jaras['centroid'].x
     
-      map = folium.Map(location = [47.162494, 19.503304], zoom_start = 7, tiles = "cartodb positron")
+      # map = folium.Map(location = [47.162494, 19.503304], zoom_start = 7, tiles = "cartodb voyager") # positron darkmatter voyager
+      # 
+      # for _, r in Jaras.iterrows():
+      #   # print(f"{r['lat']}, {r['lon']} és {r['centroid']}")
+      #   folium.Marker(location = [r['lat'], r['lon']], popup = 'Járás: {} <br> Érték: {}'.format(r['jaras'], r['VALUE'])).add_to(map)
+      # 
+      # popup = folium.GeoJsonPopup(
+      #          fields = ['jaras', 'VALUE'],
+      #          aliases = ['Járás:', 'Érték:'],
+      #          )
+      #            
+      # folium.GeoJson(data = Jaras[['geometry', 'jaras', 'VALUE']],
+      #                popup = popup
+      #                ).add_to(map)
+      # 
+      # st.components.v1.html(folium.Figure().add_child(map).render(), height = 500) # , width = 1000, scrolling = False
       
-      for _, r in Jaras.iterrows():
-        # print(f"{r['lat']}, {r['lon']} és {r['centroid']}")
-        folium.Marker(location = [r['lat'], r['lon']], popup = 'Járás: {} <br> Érték: {}'.format(r['jaras'], r['VALUE'])).add_to(map)
-    
-      popup = folium.GeoJsonPopup(
-               fields = ['jaras', 'VALUE'],
-               aliases = ['Járás:', 'Érték:'],
-               )
-                 
-      folium.GeoJson(data = Jaras[['geometry', 'jaras', 'VALUE']],
-                     popup = popup
-                     ).add_to(map)
+      m = Jaras.explore(
+        column = "VALUE", # Oszlop a színezéshez
+        # cmap = "viridis",   # Színskála # "viridis", "inferno", "Set2"
+        tooltip = ["jaras", "VALUE"], 
+        tooltip_kwds = {
+          "aliases": ["Járás:", "Érték"],
+          "labels": True
+        },
+        legend = True       # Jelmagyarázat
+      )
+      st_folium(m, width = 1400, height = 500, returned_objects = [])
       
-      st.components.v1.html(folium.Figure().add_child(map).render(), height = 500) # , width = 1000, scrolling = False
   except Exception as e:
     st.error('Kérlek, válassz ki legalább egy járást!')
   
@@ -289,27 +332,42 @@ elif selected == 'Régió':
   
   try:
     with st.spinner('A térkép megjelenítése folyamatban...'):
-      Regions.crs = 'EPSG:23700'
-      Regions['centroid'] = Regions.centroid# .to_crs('EPSG:4326')
+      # Regions.crs = 'EPSG:23700' # folium-hoz kell
+      Regions.crs = 'EPSG:4326' # geopandas-hoz kell
       
-      Regions['lat'] = Regions['centroid'].y
-      Regions['lon'] = Regions['centroid'].x
+      # Regions['centroid'] = Regions.centroid# .to_crs('EPSG:4326') # folium-hoz kell
+      # 
+      # Regions['lat'] = Regions['centroid'].y
+      # Regions['lon'] = Regions['centroid'].x
     
-      map = folium.Map(location = [47.162494, 19.503304], zoom_start = 7, tiles = "cartodb positron")
+      # map = folium.Map(location = [47.162494, 19.503304], zoom_start = 7, tiles = "cartodb voyager") # positron darkmatter voyager
+      # 
+      # for _, r in Regions.iterrows():
+      #   # print(f"{r['lat']}, {r['lon']} és {r['centroid']}")
+      #   folium.Marker(location = [r['lat'], r['lon']], popup = 'Régió: {} <br> Érték: {}'.format(r['Régió_ne'], r['VALUE'])).add_to(map)
+      # 
+      # popup = folium.GeoJsonPopup(
+      #          fields = ['Régió_ne', 'VALUE'],
+      #          aliases = ['Régió:', 'Érték:'],
+      #          )
+      #            
+      # folium.GeoJson(data = Regions[['geometry', 'Régió_ne', 'VALUE']],
+      #                popup = popup
+      #                ).add_to(map)
+      # 
+      # st.components.v1.html(folium.Figure().add_child(map).render(), height = 500) # , width = 1000, scrolling = False
       
-      for _, r in Regions.iterrows():
-        # print(f"{r['lat']}, {r['lon']} és {r['centroid']}")
-        folium.Marker(location = [r['lat'], r['lon']], popup = 'Régió: {} <br> Érték: {}'.format(r['Régió_ne'], r['VALUE'])).add_to(map)
-    
-      popup = folium.GeoJsonPopup(
-               fields = ['Régió_ne', 'VALUE'],
-               aliases = ['Régió:', 'Érték:'],
-               )
-                 
-      folium.GeoJson(data = Regions[['geometry', 'Régió_ne', 'VALUE']],
-                     popup = popup
-                     ).add_to(map)
+      m = Regions.explore(
+        column = "VALUE", # Oszlop a színezéshez
+        # cmap = "viridis",   # Színskála # "viridis", "inferno", "Set2"
+        tooltip = ["Régió_ne", "VALUE"], 
+        tooltip_kwds = {
+          "aliases": ["Régió:", "Érték"],
+          "labels": True
+        },
+        legend = True       # Jelmagyarázat
+      )
+      st_folium(m, width = 1400, height = 500, returned_objects = [])
       
-      st.components.v1.html(folium.Figure().add_child(map).render(), height = 500) # , width = 1000, scrolling = False
   except Exception as e:
     st.error('Kérlek, válassz ki legalább egy régiót!')
