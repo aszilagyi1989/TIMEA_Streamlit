@@ -1,6 +1,7 @@
+altair
 folium
 geopandas
 pandas
 plotly.express
-streamlit
+streamlit==1.53.0
 streamlit-option-menu
