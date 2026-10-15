@@ -5,3 +5,6 @@
 *.Rproj
 Test*
 output.geojson
+.streamlit/secrets.toml
+CSV
+Maps

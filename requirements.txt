@@ -1,4 +1,6 @@
 altair
+databricks-sql-connector
+pyarrow
 folium
 geopandas
 matplotlib

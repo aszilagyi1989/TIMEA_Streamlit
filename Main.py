@@ -5,17 +5,97 @@ from streamlit_option_menu import option_menu
 from streamlit_folium import st_folium
 import folium
 import plotly.express as px
+from databricks import sql
+import requests
+import io
 
 #st.cache_resource
-def initialize_counties():
-  Attributes = pd.read_csv("https://github.com/aszilagyi1989/Shiny_CSV/raw/refs/heads/main/TIMEA_Mutatok_2024.csv", sep = ";")
+def get_databricks_connection():
+  return sql.connect(
+    server_hostname = st.secrets["DATABRICKS_SERVER_HOSTNAME"], 
+    http_path = st.secrets["DATABRICKS_HTTP_PATH"], 
+    access_token = st.secrets["DATABRICKS_TOKEN"]
+  )
 
-  Counties = gpd.read_file('https://github.com/aszilagyi1989/Shiny_CSV/raw/refs/heads/main/JSon/megye_pbi.shp')
+#st.cache_data
+def load_databricks_mutatoNames():
+  conn = get_databricks_connection()
+  cursor = conn.cursor()
+  cursor.execute("select * from TY_OUT.TIMEA_MUTATOK")
+  Attributes = cursor.fetchall_arrow().to_pandas()
+  
+  cursor.close()
+  
+  return Attributes
+
+#st.cache_data
+def load_databricks_counties():
+  conn = get_databricks_connection()
+  cursor = conn.cursor()
+  cursor.execute("select * from TY_OUT.TIMEA_COUNTIES")
+  ValuesCounties = cursor.fetchall_arrow().to_pandas()
+  
+  cursor.close()
+  
+  return ValuesCounties
+  
+#st.cache_data
+def load_databricks_countmap_shapefile():
+  
+  token = st.secrets["DATABRICKS_TOKEN"]
+  host = st.secrets["DATABRICKS_SERVER_HOSTNAME"]
+  
+  # Tisztítjuk a host nevet, ha esetleg hiányozna az elejéről a https://
+  if not host.startswith("https://"):
+      host = "https://" + host
+
+  # 1. Összeállítjuk a Databricks Files API pontos végpontját a GeoJSON fájlhoz
+  # Ez az API natívan támogatja és eléri a Unity Catalog /Volumes/ útvonalait!
+  url = f"{host}/api/2.0/fs/files/Volumes/workspace/ty_out/maps/megye_pbi.json"
+  
+  headers = {
+      "Authorization": f"Bearer {token}"
+  }
+  
+  # 2. Lekérjük a teljes GeoJSON fájl tartalmát bájtként a felhőből
+  response = requests.get(url, headers = headers)
+  
+  if response.status_code != 200:
+      raise ValueError(f"Sikertelen API letöltés! Állapotkód: {response.status_code}, Üzenet: {response.text}")
+  
+  # 3. A letöltött nyers bájtokat átadjuk a Geopandas-nak memóriabeli fájlként
+  # Az io.BytesIO segítségével a Geopandas úgy olvassa be, mintha egy helyi fájl lenne
+  geojson_bytes = io.BytesIO(response.content)
+  Counties = gpd.read_file(geojson_bytes)
+  
+  # --- KRITIKUS JAVÍTÁS: HA HIÁNYZIK A CRS, BEÁLLÍTJUK AZ EREDETI MAGYAR VETÜLETET ---
+  if Counties.crs is None:
+      Counties.set_crs("EPSG:23700", inplace = True) # Kényszerítjük a magyar EOV vetületet
+  
+  # Most már biztonságosan át tudja transzformálni a Folium/Plotly által várt WGS84 formátumra
+  Counties = Counties.to_crs("EPSG:4326")
+  
   Counties = Counties[['Megyenév', 'geometry', 'Shape_Leng', 'Shape_Area']]
   Counties['Megyenév'] = Counties['Megyenév'].replace(['Csongrád'], 'Csongrád-Csanád')
   
-  ValuesCounties = pd.read_csv("https://github.com/aszilagyi1989/Shiny_CSV/raw/refs/heads/main/TIMEA_Megyek_2024.csv", sep = ";")
-  ValuesCounties['NEV'] = ValuesCounties['NEV'].str.replace(r' vármegye', '', regex = True)
+  return Counties
+
+#st.cache_data
+def initialize_counties():
+  # Attributes = pd.read_csv("https://github.com/aszilagyi1989/Shiny_CSV/raw/refs/heads/main/TIMEA_Mutatok_2024.csv", sep = ";")
+  # 
+  # Counties = gpd.read_file('https://github.com/aszilagyi1989/Shiny_CSV/raw/refs/heads/main/JSon/megye_pbi.shp')
+  # Counties = Counties[['Megyenév', 'geometry', 'Shape_Leng', 'Shape_Area']]
+  # Counties['Megyenév'] = Counties['Megyenév'].replace(['Csongrád'], 'Csongrád-Csanád')
+  
+  # ValuesCounties = pd.read_csv("https://github.com/aszilagyi1989/Shiny_CSV/raw/refs/heads/main/TIMEA_Megyek_2024.csv", sep = ";")
+  # ValuesCounties['NEV'] = ValuesCounties['NEV'].str.replace(r' vármegye', '', regex = True)
+  
+  Attributes = load_databricks_mutatoNames().copy()
+  Counties = load_databricks_countmap_shapefile().copy()
+  ValuesCounties = load_databricks_counties().copy()
+  
+  ValuesCounties['NEV'] = ValuesCounties['NEV'].str.replace(r' megye', '', regex = True)
   
   Counties = pd.merge(Counties, ValuesCounties, how = 'left', left_on = 'Megyenév', right_on = 'NEV')
   Counties = pd.merge(Counties, Attributes, how = 'left', left_on = 'M_KOD', right_on = 'MUTATO_KOD')
@@ -120,40 +200,7 @@ if selected == 'Megye':
 
   try: 
     with st.spinner('A térkép megjelenítése folyamatban...'):
-      Counties.crs = 'EPSG:23700'
-      # Counties['centroid'] = Counties.centroid.to_crs('EPSG:4326') # folium-hoz kell
-      # 
-      # Counties['lat'] = Counties['centroid'].y
-      # Counties['lon'] = Counties['centroid'].x
-      
-      # fig = px.scatter_map(Counties,
-      #                   lat = "lat",
-      #                   lon = "lon",
-      #                   size = 'size', # size = 'VALUE', # Adjust for larger circles if desired
-      #                   color = "VALUE",
-      #                   hover_name = "Megyenév",
-      #                   zoom = 6,
-      #                   )
-      # 
-      # fig.update_layout(height = 600) # , sizemin = 10
-      # st.plotly_chart(fig, height = 600)
-    
-      # map = folium.Map(location = [47.162494, 19.503304], zoom_start = 7, tiles = "cartodb voyager") # positron darkmatter voyager
-      # 
-      # for _, r in Counties.iterrows():
-      #   # print(f"{r['lat']}, {r['lon']} és {r['centroid']}")
-      #   folium.Marker(location = [r['lat'], r['lon']], popup = 'Megye: {} <br> Érték: {}'.format(r['Megyenév'], r['VALUE'])).add_to(map)
-      # 
-      # popup = folium.GeoJsonPopup(
-      #          fields = ['Megyenév', 'VALUE'],
-      #          aliases = ['Megye:', 'Érték:'],
-      #          )
-      # 
-      # folium.GeoJson(data = Counties[['geometry', 'Megyenév', 'VALUE']],
-      #                popup = popup
-      #                ).add_to(map)
-      # 
-      # st.components.v1.html(folium.Figure().add_child(map).render(), height = 500) # , width = 1000, scrolling = False
+      # Counties.crs = 'EPSG:23700'
       
       m = Counties.explore(
         column = "VALUE", # Oszlop a színezéshez
